@@ -1,0 +1,25 @@
+---
+# Node Exporter
+node_exporter_port: 9100
+node_exporter_version: "v1.8.2"
+
+# cAdvisor
+cadvisor_port: 8080
+cadvisor_version: "v0.49.1"
+
+# Docker network
+monitoring_network: "monitoring"
+
+# IP whitelists (CIDR or single IP)
+node_exporter_allowed_ips:
+  - "127.0.0.1/32"
+
+cadvisor_allowed_ips:
+  - "127.0.0.1/32"
+
+# Firewall backend: "iptables" or "ufw"
+firewall_backend: "iptables"
+
+# Data directories (host mounts)
+node_exporter_data_dir: "/opt/monitoring/node-exporter"
+cadvisor_data_dir: "/opt/monitoring/cadvisor"

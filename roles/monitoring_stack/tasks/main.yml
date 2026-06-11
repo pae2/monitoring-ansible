@@ -1,0 +1,133 @@
+---
+- name: Check if Docker is installed
+  command: docker --version
+  register: docker_check
+  ignore_errors: true
+  changed_when: false
+
+- name: Add GPG key
+  apt_key:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    state: present
+  when: docker_check.rc != 0
+
+- name: Add Docker repository to apt
+  apt_repository:
+    repo: deb https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable
+    state: present
+  when: docker_check.rc != 0
+
+- name: Install dependencies
+  apt:
+    name: "{{ item }}"
+    state: present
+    update_cache: yes
+  loop:
+    - apt-transport-https
+    - ca-certificates
+    - curl
+    - gnupg-agent
+    - software-properties-common
+  when: docker_check.rc != 0
+
+- name: Ensure Docker is installed
+  apt:
+    name: "{{ item }}"
+    state: present
+    update_cache: yes
+  loop:
+    - docker-ce
+    - docker-ce-cli
+    - containerd.io
+  when: docker_check.rc != 0
+
+- name: Ensure Docker is running
+  service:
+    name: docker
+    state: started
+    enabled: yes
+
+- name: Create monitoring network
+  docker_network:
+    name: "{{ monitoring_network }}"
+    state: present
+
+- name: Create data directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - "{{ node_exporter_data_dir }}"
+    - "{{ cadvisor_data_dir }}"
+
+- name: Deploy docker-compose.yml
+  template:
+    src: docker-compose.yml.j2
+    dest: /opt/monitoring/docker-compose.yml
+    mode: "0644"
+  notify: Restart monitoring containers
+
+- name: Start monitoring containers
+  command: docker compose up -d
+  args:
+    chdir: /opt/monitoring
+
+# --- Firewall: restrict node-exporter & cadvisor by IP ---
+
+- name: Install iptables
+  package:
+    name: iptables
+    state: present
+  when: firewall_backend == "iptables"
+
+- name: Allow node-exporter from trusted IPs
+  iptables:
+    chain: INPUT
+    protocol: tcp
+    destination_port: "{{ node_exporter_port }}"
+    source: "{{ item }}"
+    jump: ACCEPT
+    state: present
+  loop: "{{ node_exporter_allowed_ips }}"
+  when: firewall_backend == "iptables"
+
+- name: Block node-exporter from others
+  iptables:
+    chain: INPUT
+    protocol: tcp
+    destination_port: "{{ node_exporter_port }}"
+    jump: DROP
+    state: present
+  when: firewall_backend == "iptables"
+
+- name: Allow cadvisor from trusted IPs
+  iptables:
+    chain: INPUT
+    protocol: tcp
+    destination_port: "{{ cadvisor_port }}"
+    source: "{{ item }}"
+    jump: ACCEPT
+    state: present
+  loop: "{{ cadvisor_allowed_ips }}"
+  when: firewall_backend == "iptables"
+
+- name: Block cadvisor from others
+  iptables:
+    chain: INPUT
+    protocol: tcp
+    destination_port: "{{ cadvisor_port }}"
+    jump: DROP
+    state: present
+  when: firewall_backend == "iptables"
+
+- name: Ensure iptables directory exists
+  file:
+    path: /etc/iptables
+    state: directory
+    mode: "0755"
+  when: firewall_backend == "iptables"
+
+- name: Save iptables rules
+  command: iptables-save -f /etc/iptables/rules.v4
+  when: firewall_backend == "iptables"

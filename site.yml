@@ -1,0 +1,13 @@
+---
+- name: Deploy monitoring stack (node-exporter + cadvisor)
+  hosts: monitoring
+  become: true
+  roles:
+    - role: monitoring_stack
+      vars:
+        node_exporter_allowed_ips:
+          - "10.0.0.0/8"
+          - "192.168.1.0/24"
+        cadvisor_allowed_ips:
+          - "10.0.0.0/8"
+          - "192.168.1.0/24"
