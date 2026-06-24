@@ -10,6 +10,9 @@ cadvisor_version: "v0.49.1"
 # Docker network
 monitoring_network: "monitoring"
 
+# Host directory for compose project
+monitoring_compose_dir: "/opt/monitoring"
+
 # IP whitelists (CIDR or single IP)
 node_exporter_allowed_ips:
   - "127.0.0.1/32"
@@ -17,9 +20,5 @@ node_exporter_allowed_ips:
 cadvisor_allowed_ips:
   - "127.0.0.1/32"
 
-# Firewall backend: "iptables" or "ufw"
-firewall_backend: "iptables"
-
-# Data directories (host mounts)
-node_exporter_data_dir: "/opt/monitoring/node-exporter"
-cadvisor_data_dir: "/opt/monitoring/cadvisor"
+# Firewall (iptables). Set to false to skip firewall management entirely.
+firewall_enabled: true

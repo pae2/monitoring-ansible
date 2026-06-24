@@ -1,0 +1,92 @@
+---
+- name: Install iptables persistence package
+  ansible.builtin.apt:
+    name:
+      - iptables
+      - iptables-persistent
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Ensure DOCKER-USER chain exists
+  ansible.builtin.iptables:
+    chain: DOCKER-USER
+    chain_management: true
+    state: present
+  notify: Persist iptables rules
+
+# --- node-exporter: network_mode=host → traffic hits INPUT chain ---
+
+- name: Allow loopback to node-exporter
+  ansible.builtin.iptables:
+    chain: INPUT
+    in_interface: lo
+    protocol: tcp
+    destination_port: "{{ node_exporter_port }}"
+    jump: ACCEPT
+    action: insert
+    rule_num: 1
+    comment: "monitoring_stack: node-exporter loopback"
+    state: present
+  notify: Persist iptables rules
+
+- name: Allow node-exporter from trusted IPs
+  ansible.builtin.iptables:
+    chain: INPUT
+    protocol: tcp
+    destination_port: "{{ node_exporter_port }}"
+    source: "{{ item }}"
+    jump: ACCEPT
+    action: insert
+    rule_num: 1
+    comment: "monitoring_stack: node-exporter allow {{ item }}"
+    state: present
+  loop: "{{ node_exporter_allowed_ips }}"
+  notify: Persist iptables rules
+
+- name: Drop other access to node-exporter
+  ansible.builtin.iptables:
+    chain: INPUT
+    protocol: tcp
+    destination_port: "{{ node_exporter_port }}"
+    jump: DROP
+    action: append
+    comment: "monitoring_stack: node-exporter default-deny"
+    state: present
+  notify: Persist iptables rules
+
+# --- cadvisor: published port → traffic hits DOCKER-USER chain ---
+
+- name: Allow cadvisor from trusted IPs
+  ansible.builtin.iptables:
+    chain: DOCKER-USER
+    protocol: tcp
+    destination_port: "{{ cadvisor_port }}"
+    source: "{{ item }}"
+    jump: ACCEPT
+    action: insert
+    rule_num: 1
+    comment: "monitoring_stack: cadvisor allow {{ item }}"
+    state: present
+  loop: "{{ cadvisor_allowed_ips }}"
+  notify: Persist iptables rules
+
+- name: Drop other access to cadvisor
+  ansible.builtin.iptables:
+    chain: DOCKER-USER
+    protocol: tcp
+    destination_port: "{{ cadvisor_port }}"
+    jump: DROP
+    action: append
+    comment: "monitoring_stack: cadvisor default-deny"
+    state: present
+  notify: Persist iptables rules
+
+- name: Ensure DOCKER-USER falls through
+  ansible.builtin.iptables:
+    chain: DOCKER-USER
+    jump: RETURN
+    action: append
+    comment: "monitoring_stack: fall-through"
+    state: present
+  notify: Persist iptables rules

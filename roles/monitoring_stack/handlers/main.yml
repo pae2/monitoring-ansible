@@ -1,8 +1,4 @@
 ---
-- name: Restart monitoring containers
-  command: docker compose up -d --force-recreate
-  args:
-    chdir: /opt/monitoring
-
 - name: Persist iptables rules
-  command: iptables-save -f /etc/iptables/rules.v4
+  ansible.builtin.command: netfilter-persistent save
+  changed_when: true
